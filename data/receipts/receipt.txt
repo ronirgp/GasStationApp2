@@ -1,7 +1,7 @@
 ===== RECEIPT =====
-Receipt #: 14
-Date: 2026-06-10
-Time: 11:17:20
+Receipt #: 15
+Date: 2026-06-12
+Time: 07:55:06
 Product: Diesel
-Amount: $25.0
+Amount: $300.00
 ===================

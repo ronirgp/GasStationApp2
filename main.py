@@ -130,6 +130,7 @@ while True:
     print("13. Search Inventory")
     print("14. Update Inventory")
     print("15. Restock Inventory")
+    print("16. Delete Inventory Item")
     print("====================================")
 
     choice = input("Choose: ")
@@ -425,8 +426,23 @@ while True:
         if cursor.rowcount > 0:
             print("Inventory restocked successfully!")
         else:
-            print("Product not found.")            
-        
+            print("Product not found.") 
+                
+    elif choice == "16":
+
+        product_name = input("Product Name to Delete: ").strip()
+
+        cursor.execute(
+            "DELETE FROM inventory WHERE product = ?",
+            (product_name,)
+        )
+
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            print("Product deleted successfully!")
+        else:
+            print("Product not found.")    
         
     elif choice == "8":
         print("Logging out...")
