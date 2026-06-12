@@ -128,6 +128,7 @@ while True:
     print("11. Show Inventory")
     print("12. Low Stock Report")
     print("13. Search Inventory")
+    print("14. Update Inventory")
     print("====================================")
 
     choice = input("Choose: ")
@@ -357,6 +358,7 @@ while True:
         else:
             for item in inventory_items:
                 print(f"{item[0]} - {item[1]}")   
+                
     elif choice == "12":
 
         print("\nLOW STOCK REPORT")
@@ -387,6 +389,23 @@ while True:
         if item:
             print("\nFOUND:")
             print(f"{item[0]} - {item[1]}")
+        else:
+            print("Product not found.")
+            
+    elif choice == "14":
+
+        product_name = input("Product Name: ").strip()
+        new_quantity = float(input("New Quantity: "))
+
+        cursor.execute(
+            "UPDATE inventory SET quantity = ? WHERE product = ?",
+            (new_quantity, product_name)
+        )
+
+        conn.commit()
+
+        if cursor.rowcount > 0:
+            print("Inventory updated successfully!")
         else:
             print("Product not found.")            
                 
