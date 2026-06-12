@@ -1,12 +1,37 @@
-import json
+import os
 import sqlite3
 import hashlib
 from datetime import datetime
 
+DATA_DIR = "data"
+RECEIPTS_DIR = os.path.join(DATA_DIR, "receipts")
+DB_PATH = os.path.join(DATA_DIR, "gas_station.db")
+
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-conn = sqlite3.connect("data/gas_station.db")
+
+def read_float(prompt, minimum=None, minimum_message=None):
+    while True:
+        raw_value = input(prompt).strip()
+
+        try:
+            value = float(raw_value)
+        except ValueError:
+            print("Please enter a valid number.")
+            continue
+
+        if minimum is not None and value < minimum:
+            print(minimum_message)
+            continue
+
+        return value
+
+
+os.makedirs(RECEIPTS_DIR, exist_ok=True)
+
+conn = sqlite3.connect(DB_PATH)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -101,17 +126,25 @@ while True:
     print("9. Exit")
     print("10. Add Inventory")
     print("11. Show Inventory")
+    print("12. Low Stock Report")
+    print("13. Search Inventory")
     print("====================================")
 
     choice = input("Choose: ")
 
     if choice == "1":
-        product = input("Product: ")
-        amount = float(input("Amount ($): "))
+        product = input("Product: ").strip()
 
-        if amount <= 0:
-            print("Amount must be greater than 0.")
+        if not product:
+            print("Product name is required.")
             continue
+
+        amount = read_float(
+            "Amount ($): ",
+            minimum=0.01,
+            minimum_message="Amount must be greater than 0."
+        )
+
         cursor.execute(
             "INSERT INTO sales (product, amount) VALUES (?, ?)",
             (product, amount)
@@ -128,24 +161,20 @@ while True:
 
         conn.commit()
         
-        record = {
-            "product": product,
-            "amount": amount
-        }
-
-
         current_datetime = datetime.now()
 
         date = current_datetime.strftime("%Y-%m-%d")
         time = current_datetime.strftime("%H:%M:%S")
         
-        with open("data/receipts/receipt.txt", "w") as f:
+        receipt_path = os.path.join(RECEIPTS_DIR, "receipt.txt")
+
+        with open(receipt_path, "w") as f:
             f.write("===== RECEIPT =====\n")
             f.write(f"Receipt #: {receipt_id}\n")
             f.write(f"Date: {date}\n")
             f.write(f"Time: {time}\n")
             f.write(f"Product: {product}\n")
-            f.write(f"Amount: ${amount}\n")
+            f.write(f"Amount: ${amount:.2f}\n")
             f.write("===================\n")
 
             print("Sale added!")
@@ -161,20 +190,24 @@ while True:
             print("No sales yet.")
         else:
             for sale in sales_data:
-                print(f"{sale[0]} - ${sale[1]}")
+                print(f"{sale[0]} - ${sale[1]:.2f}")
                 
     elif choice == "3":
         cursor.execute("SELECT amount FROM cash WHERE id = 1")
 
         cash_amount = cursor.fetchone()[0]
 
-        print("Total Cash:", cash_amount)
+        print(f"Total Cash: ${cash_amount:.2f}")
 
     
     
     elif choice == "4":
 
-        amount = float(input("Refund Amount: "))
+        amount = read_float(
+            "Refund Amount: ",
+            minimum=0.01,
+            minimum_message="Refund amount must be greater than 0."
+        )
 
         cursor.execute("SELECT amount FROM cash WHERE id = 1")
         cash_amount = cursor.fetchone()[0]
@@ -201,6 +234,24 @@ while True:
 
         new_user = input("New Cashier Username: ").strip()
         new_password = input("New Cashier Password: ").strip()
+
+        if not new_user:
+            print("Username is required.")
+            continue
+
+        if not new_password:
+            print("Password is required.")
+            continue
+
+        cursor.execute(
+            "SELECT 1 FROM users WHERE username = ?",
+            (new_user,)
+        )
+
+        if cursor.fetchone():
+            print("That username already exists.")
+            continue
+
         hashed_password = hash_password(new_password)
 
         cursor.execute(
@@ -220,6 +271,14 @@ while True:
 
         delete_user = input("Employee username to delete: ").strip()
 
+        if not delete_user:
+            print("Username is required.")
+            continue
+
+        if delete_user == "admin":
+            print("The admin account cannot be deleted.")
+            continue
+
         cursor.execute(
             "DELETE FROM users WHERE username = ?",
             (delete_user,)
@@ -227,7 +286,10 @@ while True:
 
         conn.commit()
 
-        print("Employee account deleted.")
+        if cursor.rowcount == 0:
+            print("Employee account not found.")
+        else:
+            print("Employee account deleted.")
 
     elif choice == "7":
 
@@ -249,7 +311,7 @@ while True:
         cash_amount = cursor.fetchone()[0]
 
         print("\nCash Register Total:")
-        print("$", cash_amount)
+        print(f"${cash_amount:.2f}")
         
         print("\nTotal Sales Recorded:")
         cursor.execute("SELECT COUNT(*) FROM sales")
@@ -260,7 +322,16 @@ while True:
     elif choice == "10":
 
         product = input("Product Name: ").strip()
-        quantity = float(input("Quantity: "))
+
+        if not product:
+            print("Product name is required.")
+            continue
+
+        quantity = read_float(
+            "Quantity: ",
+            minimum=0,
+            minimum_message="Quantity cannot be negative."
+        )
 
         cursor.execute(
             "INSERT INTO inventory (product, quantity) VALUES (?, ?)",
@@ -286,6 +357,39 @@ while True:
         else:
             for item in inventory_items:
                 print(f"{item[0]} - {item[1]}")   
+    elif choice == "12":
+
+        print("\nLOW STOCK REPORT")
+
+        cursor.execute(
+            "SELECT product, quantity FROM inventory WHERE quantity < 20"
+        )
+
+        low_stock_items = cursor.fetchall()
+
+        if len(low_stock_items) == 0:
+            print("No low stock items.")
+        else:
+            for item in low_stock_items:
+                print(f"{item[0]} - {item[1]} units remaining")
+                
+    elif choice == "13":
+
+        product_name = input("Product Name: ").strip()
+
+        cursor.execute(
+            "SELECT product, quantity FROM inventory WHERE product = ?",
+            (product_name,)
+        )
+
+        item = cursor.fetchone()
+
+        if item:
+            print("\nFOUND:")
+            print(f"{item[0]} - {item[1]}")
+        else:
+            print("Product not found.")            
+                
         
         
     elif choice == "8":
@@ -300,3 +404,5 @@ while True:
 
     else:
         print("Invalid option")
+
+conn.close()
